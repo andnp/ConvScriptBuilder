@@ -57,12 +57,12 @@ class ConvANN {
 
     buildConvLayer(prev: Tensor) {
         const id = Math.random();
-        const convW = this.graph.variable('convW' + id, Array4D.randTruncatedNormal([5, 5, prev.shape[2], 32], 0, 0.1));
-        const convB = this.graph.variable('convB' + id, Array1D.zeros([32]));
-        const convLayer = this.graph.conv2d(prev, convW, convB, 5, 32);
+        const convW = this.graph.variable('convW' + id, Array4D.randTruncatedNormal([5, 5, prev.shape[2], 4], 0, 0.1));
+        const convB = this.graph.variable('convB' + id, Array1D.zeros([4]));
+        const convLayer = this.graph.conv2d(prev, convW, convB, 5, 4);
         const reluLayer = this.graph.relu(convLayer);
-        const maxPool = this.graph.maxPool(reluLayer, 2, 2);
-        return reluLayer;
+        const maxPool = this.graph.maxPool(reluLayer, 2, 2, 0);
+        return maxPool;
     }
 
     setup(inputs: number[], outputs: number[], math: NDArrayMathGPU) {
@@ -71,12 +71,18 @@ class ConvANN {
         this.target = this.graph.placeholder('target', outputs);
 
         const convLayer = this.buildConvLayer(this.input);
-        const flat = this.graph.reshape(convLayer, [product(convLayer.shape)]);
-        let layer1 = this.graph.layers.dense('layer1', flat, 128, (x) => this.graph.relu(x), true);
-        let layer2 = this.graph.layers.dense('layer2', layer1, 64, (x) => this.graph.relu(x), true);
-        let layer3 = this.graph.layers.dense('layer3', layer2, 32, (x) => this.graph.relu(x), true);
-        let layer4 = this.graph.layers.dense('layer4', layer3, 16, (x) => this.graph.relu(x), true);
-        let layer5 = this.graph.layers.dense('layer5', layer4, 1);
+        const convLayer2 = this.buildConvLayer(convLayer);
+        const convLayer3 = this.buildConvLayer(convLayer2);
+        // const convLayer4 = this.buildConvLayer(convLayer3);
+        console.log(convLayer3.shape)
+        const flat = this.graph.reshape(convLayer3, [product(convLayer3.shape)]);
+        console.log(flat.shape)
+
+        let layer1 = this.graph.layers.dense('layer1', flat, 2048, (x) => this.graph.relu(x), true);
+        let layer2 = this.graph.layers.dense('layer2', layer1, 1024, (x) => this.graph.relu(x), true);
+        let layer3 = this.graph.layers.dense('layer3', layer2, 512, (x) => this.graph.relu(x), true);
+        let layer4 = this.graph.layers.dense('layer4', layer3, 256, (x) => this.graph.relu(x), true);
+        let layer5 = this.graph.layers.dense('layer5', layer4, 1, (x) => x, true);
         this.prediction = layer5;
         this.cost = this.graph.meanSquaredCost(this.target, this.prediction);
 
@@ -84,7 +90,7 @@ class ConvANN {
     }
 
     train(math: NDArrayMathGPU, image1s: Array3D[], image2s: Array3D[], ys: Array1D[]) {
-        const optimizer = new SGDOptimizer(0.01);
+        const optimizer = new SGDOptimizer(0.06);
         let cost;
         math.scope(() => {
             const stacked = image1s.map((i1, i) => math.concat3D(i1, image2s[i], 2));
@@ -100,7 +106,7 @@ class ConvANN {
                 data: yprovider
             }];
 
-            const out = this.session.train(this.cost, mapping, 100, optimizer, CostReduction.MEAN);
+            const out = this.session.train(this.cost, mapping, 10, optimizer, CostReduction.MEAN);
             cost = out.get();
         });
         return cost;
@@ -139,7 +145,7 @@ const ConvANN_merp = async () => {
         const Cs = [];
         const ys = [];
 
-        for (let i = 0; i < 100000; ++i) {
+        for (let i = 0; i < 100; ++i) {
             Target.clear();
             Target.randomize();
             Current.clear();
@@ -147,7 +153,7 @@ const ConvANN_merp = async () => {
             Target.draw();
             Current.draw();
 
-            await delay(10);
+            await delay(2);
 
             const rawT = Target.getImage();
             const rawC = Current.getImage();
@@ -164,8 +170,10 @@ const ConvANN_merp = async () => {
         }
         console.log(i++, ann.train(math, Ts, Cs, ys));
     };
-    run();
-    setInterval(run, 45000);
+    while(true) {
+        await run();
+        await delay(1000);
+    }
 };
 
 ConvANN_merp();

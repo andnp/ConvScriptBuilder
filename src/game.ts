@@ -1,7 +1,7 @@
 import Canvas from './components/canvas';
 
-export const WIDTH = 150;
-export const HEIGHT = 100;
+export const WIDTH = 400;
+export const HEIGHT = 200;
 
 export interface Point_t {
     x: number;
@@ -36,7 +36,7 @@ class Rectangle extends Shape {
         this.center = point;
     }
 
-    constructor (center: Point_t, canvas: Canvas, width = 10, height = 5) {
+    constructor (center: Point_t, canvas: Canvas, width = 40, height = 20) {
         super(center, canvas);
         this.width = width;
         this.height = height;
